@@ -6,12 +6,14 @@
 # Additionally, several methods, like `#gets`, are implemented in a more
 # efficient way.
 module IO::Buffered
+  @in_buffer = Pointer(UInt8).null
+  @out_buffer = Pointer(UInt8).null
   @in_buffer_rem = Bytes.empty
   @out_count = 0
   @sync = false
   @read_buffering = true
   @flush_on_newline = false
-  @buffer_size = 8192
+  @buffer_size = IO::DEFAULT_BUFFER_SIZE
 
   # Reads at most *slice.size* bytes from the wrapped `IO` into *slice*.
   # Returns the number of bytes read.

@@ -164,6 +164,11 @@ class Dir
     self
   end
 
+  # This method is faster than `.info` and avoids race conditions if a `Dir` is already open on POSIX systems, but not necessarily on windows.
+  def info : File::Info
+    Crystal::System::Dir.info(@dir, path)
+  end
+
   # Closes the directory stream.
   def close : Nil
     return if @closed
@@ -171,7 +176,12 @@ class Dir
     @closed = true
   end
 
-  # Returns the current working directory.
+  # Returns an absolute path to the current working directory.
+  #
+  # The result is similar to the shell commands `pwd` (POSIX) and `cd` (Windows).
+  #
+  # On POSIX systems, it respects the environment value `$PWD` if available and
+  # if it points to the current working directory.
   def self.current : String
     Crystal::System::Dir.current
   end
@@ -282,13 +292,21 @@ class Dir
     mkdir(path, mode) unless Dir.exists?(path)
   end
 
-  # Removes the directory at the given path.
+  # Removes the directory at *path*. Raises `File::Error` on failure.
+  #
+  # On Windows, also raises `File::Error` if *path* points to a directory that
+  # is a reparse point, such as a symbolic link. Those directories can be
+  # deleted using `File.delete` instead.
   def self.delete(path : Path | String) : Nil
     Crystal::System::Dir.delete(path.to_s, raise_on_missing: true)
   end
 
-  # Removes the directory at the given path.
-  # Returns `false` if the directory does not exist.
+  # Removes the directory at *path*, or returns `false` if the directory does
+  # not exist. Raises `File::Error` on other kinds of failure.
+  #
+  # On Windows, also raises `File::Error` if *path* points to a directory that
+  # is a reparse point, such as a symbolic link. Those directories can be
+  # deleted using `File.delete?` instead.
   def self.delete?(path : Path | String) : Bool
     Crystal::System::Dir.delete(path.to_s, raise_on_missing: false)
   end

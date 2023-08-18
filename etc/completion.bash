@@ -13,7 +13,7 @@ _crystal_compgen_options(){
 _crystal_compgen_sources(){
     local IFS=$'\n'
     local pattern=$1
-    compopt -o filenames
+    type compopt &> /dev/null && compopt -o filenames
     COMPREPLY=( $(compgen -f -o plusdirs -X '!*.cr' -- "${pattern}") )
 }
 
@@ -21,7 +21,7 @@ _crystal_compgen_sources(){
 _crystal_compgen_files(){
     local IFS=$'\n'
     local pattern=$1
-    compopt -o filenames
+    type compopt &> /dev/null && compopt -o filenames
     COMPREPLY=( $(compgen -o default -- "${pattern}") )
 }
 
@@ -33,7 +33,7 @@ _crystal()
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="init build docs eval play run spec tool help version --help --version"
+    commands="init build clear_cache docs eval play run spec tool help version --help --version"
 
     case "${cmd}" in
         init)
@@ -81,7 +81,7 @@ _crystal()
                 _crystal_compgen_sources "${cur}"
             fi
             ;;
-        docs|eval|spec|version|help)
+        clear_cache|docs|eval|spec|version|help)
             # These commands do not accept any options nor subcommands
             _crystal_compgen_files "${cur}"
             ;;

@@ -1,5 +1,6 @@
 require "c/fcntl"
 require "io/evented"
+require "termios"
 
 # :nodoc:
 module Crystal::System::FileDescriptor
@@ -43,6 +44,10 @@ module Crystal::System::FileDescriptor
     fcntl(LibC::F_SETFL, new_flags) unless new_flags == current_flags
   end
 
+  private def system_blocking_init(value)
+    self.system_blocking = false unless value
+  end
+
   private def system_close_on_exec?
     flags = fcntl(LibC::F_GETFD)
     flags.bits_set? LibC::FD_CLOEXEC
@@ -63,7 +68,7 @@ module Crystal::System::FileDescriptor
     r
   end
 
-  private def system_info
+  def self.system_info(fd)
     stat = uninitialized LibC::Stat
     ret = File.fstat(fd, pointerof(stat))
 
@@ -71,7 +76,11 @@ module Crystal::System::FileDescriptor
       raise IO::Error.from_errno("Unable to get info")
     end
 
-    FileInfo.new(stat)
+    ::File::Info.new(stat)
+  end
+
+  private def system_info
+    FileDescriptor.system_info fd
   end
 
   private def system_seek(offset, whence : IO::Seek) : Nil
@@ -183,5 +192,44 @@ module Crystal::System::FileDescriptor
     io.close_on_exec = true
     io.sync = true
     io
+  end
+
+  private def system_echo(enable : Bool, & : ->)
+    system_console_mode do |mode|
+      flags = LibC::ECHO | LibC::ECHOE | LibC::ECHOK | LibC::ECHONL
+      mode.c_lflag = enable ? (mode.c_lflag | flags) : (mode.c_lflag & ~flags)
+      if LibC.tcsetattr(fd, LibC::TCSANOW, pointerof(mode)) != 0
+        raise IO::Error.from_errno("tcsetattr")
+      end
+      yield
+    end
+  end
+
+  private def system_raw(enable : Bool, & : ->)
+    system_console_mode do |mode|
+      if enable
+        LibC.cfmakeraw(pointerof(mode))
+      else
+        mode.c_iflag |= LibC::BRKINT | LibC::ISTRIP | LibC::ICRNL | LibC::IXON
+        mode.c_oflag |= LibC::OPOST
+        mode.c_lflag |= LibC::ECHO | LibC::ECHOE | LibC::ECHOK | LibC::ECHONL | LibC::ICANON | LibC::ISIG | LibC::IEXTEN
+      end
+      if LibC.tcsetattr(fd, LibC::TCSANOW, pointerof(mode)) != 0
+        raise IO::Error.from_errno("tcsetattr")
+      end
+      yield
+    end
+  end
+
+  @[AlwaysInline]
+  private def system_console_mode(&)
+    if LibC.tcgetattr(fd, out mode) != 0
+      raise IO::Error.from_errno("tcgetattr")
+    end
+
+    before = mode
+    ret = yield mode
+    LibC.tcsetattr(fd, LibC::TCSANOW, pointerof(before))
+    ret
   end
 end

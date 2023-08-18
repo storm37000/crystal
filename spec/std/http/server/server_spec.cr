@@ -1,6 +1,6 @@
 require "../spec_helper"
 require "http/server"
-require "http/client/response"
+require "http/client"
 require "../../../support/ssl"
 require "../../../support/channel"
 
@@ -56,7 +56,7 @@ describe HTTP::Server do
   it "closes the server" do
     server = HTTP::Server.new { }
     address = server.bind_unused_port
-    ch = Channel(Symbol).new
+    ch = Channel(SpecChannelStatus).new
 
     spawn do
       server.listen
@@ -78,7 +78,7 @@ describe HTTP::Server do
     sleep 0.1
     server.close
 
-    ch.receive.should eq(:end)
+    ch.receive.end?.should be_true
   end
 
   it "reuses the TCP port (SO_REUSEPORT)" do
@@ -121,12 +121,12 @@ describe HTTP::Server do
 
     run_server(server) do
       TCPSocket.open(address.address, address.port) do |socket|
-        socket << requestize(<<-REQUEST
+        socket << requestize(<<-HTTP
           POST / HTTP/1.1
           Expect: 100-continue
           Content-Length: 5
 
-          REQUEST
+          HTTP
         )
         socket << "\r\n"
         socket.flush
@@ -153,12 +153,12 @@ describe HTTP::Server do
 
     run_server(server) do
       TCPSocket.open(address.address, address.port) do |socket|
-        socket << requestize(<<-REQUEST
+        socket << requestize(<<-HTTP
           POST / HTTP/1.1
           Expect: 100-continue
           Content-Length: 5
 
-          REQUEST
+          HTTP
         )
         socket << "\r\n"
         socket.flush

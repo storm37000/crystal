@@ -55,5 +55,7 @@ require "./uri"
 require "./uuid"
 require "./uuid/json"
 require "./syscall"
-require "./system/*"
+{% unless flag?(:win32) %}
+  require "./system/*"
+{% end %}
 require "./docs_pseudo_methods"

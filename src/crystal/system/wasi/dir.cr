@@ -56,12 +56,16 @@ module Crystal::System::Dir
              else                                 false
              end
 
-    Entry.new(name, is_dir)
+    Entry.new(name, is_dir, false)
   end
 
   def self.rewind(dir) : Nil
     dir.cookie = 0
     dir.end_pos = dir.pos = dir.buf.size.to_u32
+  end
+
+  def self.info(dir, path) : ::File::Info
+    Crystal::System::FileDescriptor.system_info dir.fd
   end
 
   def self.close(dir, path) : Nil

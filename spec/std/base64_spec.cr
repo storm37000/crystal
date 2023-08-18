@@ -1,7 +1,7 @@
 require "spec"
 require "base64"
 require "crystal/digest/md5"
-require "../support/string"
+require "spec/helpers/string"
 
 # rearrange parameters for `assert_prints`
 {% for method in %w(encode strict_encode urlsafe_encode) %}
@@ -46,6 +46,12 @@ describe "Base64" do
     slice = Bytes.new(5) { 1_u8 }
     assert_prints base64_encode(slice), "AQEBAQE=\n"
     assert_prints base64_strict_encode(slice), "AQEBAQE="
+  end
+
+  it "encodes empty slice" do
+    slice = Bytes.empty
+    assert_prints base64_encode(slice), ""
+    assert_prints base64_strict_encode(slice), ""
   end
 
   it "encodes static array" do

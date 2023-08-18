@@ -23,11 +23,8 @@ class File
       io << Time.local.to_s("%Y%m%d")
       io << '-'
 
-      {% unless flag?(:win32) %}
-        # TODO: Remove this once Process is implemented
-        io << Process.pid
-        io << '-'
-      {% end %}
+      io << Process.pid
+      io << '-'
 
       io << Random.rand(0x100000000).to_s(36)
 
@@ -111,7 +108,7 @@ class File
   # *encoding* and *invalid* are passed to `IO#set_encoding`.
   #
   # It is the caller's responsibility to remove the file when no longer needed.
-  def self.tempfile(prefix : String?, suffix : String?, *, dir : String = Dir.tempdir, encoding = nil, invalid = nil)
+  def self.tempfile(prefix : String?, suffix : String?, *, dir : String = Dir.tempdir, encoding = nil, invalid = nil, &)
     tempfile = tempfile(prefix: prefix, suffix: suffix, dir: dir, encoding: encoding, invalid: invalid)
     begin
       yield tempfile
@@ -142,7 +139,7 @@ class File
   # *encoding* and *invalid* are passed to `IO#set_encoding`.
   #
   # It is the caller's responsibility to remove the file when no longer needed.
-  def self.tempfile(suffix : String? = nil, *, dir : String = Dir.tempdir, encoding = nil, invalid = nil)
+  def self.tempfile(suffix : String? = nil, *, dir : String = Dir.tempdir, encoding = nil, invalid = nil, &)
     tempfile(prefix: nil, suffix: suffix, dir: dir, encoding: encoding, invalid: invalid) do |tempfile|
       yield tempfile
     end

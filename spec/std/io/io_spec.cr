@@ -2,9 +2,7 @@ require "../spec_helper"
 require "../../support/channel"
 require "spec/helpers/iterate"
 
-{% unless flag?(:win32) %}
-  require "socket"
-{% end %}
+require "socket"
 require "big"
 require "base64"
 
@@ -74,7 +72,7 @@ private class SimpleIOMemory < IO
 
   private def resize_to_capacity(capacity)
     @capacity = capacity
-    @buffer = @buffer.realloc(@capacity)
+    @buffer = GC.realloc(@buffer, @capacity)
   end
 end
 
@@ -101,7 +99,7 @@ end
 
 describe IO do
   describe "partial read" do
-    pending_win32 "doesn't block on first read.  blocks on 2nd read" do
+    it "doesn't block on first read.  blocks on 2nd read" do
       IO.pipe do |read, write|
         write.puts "hello"
         slice = Bytes.new 1024
@@ -246,6 +244,11 @@ describe IO do
       io.gets('w', 10_000).should eq("llo\nw")
       io.gets('z', 10_000).should eq("orld\n")
       io.gets('a', 3).should be_nil
+    end
+
+    it "doesn't underflow when limit is unsigned" do
+      io = IO::Memory.new("aїa")
+      io.gets('є', 2u32).should eq("aї")
     end
 
     it "raises if invoking gets with negative limit" do
@@ -412,13 +415,17 @@ describe IO do
       str.read_fully?(slice).should be_nil
     end
 
-    it "raises if trying to read to an IO not opened for reading" do
-      IO.pipe do |r, w|
-        expect_raises(IO::Error, "File not open for reading") do
-          w.gets
+    # pipe(2) returns bidirectional file descriptors on FreeBSD,
+    # gate this test behind the platform flag.
+    {% unless flag?(:freebsd) %}
+      it "raises if trying to read to an IO not opened for reading" do
+        IO.pipe do |r, w|
+          expect_raises(IO::Error, "File not open for reading") do
+            w.gets
+          end
         end
       end
-    end
+    {% end %}
 
     describe ".same_content?" do
       it "compares two ios, one way (true)" do
@@ -533,16 +540,20 @@ describe IO do
       io.read_byte.should be_nil
     end
 
-    it "raises if trying to write to an IO not opened for writing" do
-      IO.pipe do |r, w|
-        # unless sync is used the flush on close triggers the exception again
-        r.sync = true
+    # pipe(2) returns bidirectional file descriptors on FreeBSD,
+    # gate this test behind the platform flag.
+    {% unless flag?(:freebsd) %}
+      it "raises if trying to write to an IO not opened for writing" do
+        IO.pipe do |r, w|
+          # unless sync is used the flush on close triggers the exception again
+          r.sync = true
 
-        expect_raises(IO::Error, "File not open for writing") do
-          r << "hello"
+          expect_raises(IO::Error, "File not open for writing") do
+            r << "hello"
+          end
         end
       end
-    end
+    {% end %}
   end
 
   {% unless flag?(:without_iconv) %}
@@ -691,7 +702,7 @@ describe IO do
         it "says invalid byte sequence" do
           io = SimpleIOMemory.new(Slice.new(1, 255_u8))
           io.set_encoding("EUC-JP")
-          expect_raises ArgumentError, {% if flag?(:musl) %}"Incomplete multibyte sequence"{% else %}"Invalid multibyte sequence"{% end %} do
+          expect_raises ArgumentError, {% if flag?(:musl) || flag?(:freebsd) %}"Incomplete multibyte sequence"{% else %}"Invalid multibyte sequence"{% end %} do
             io.read_char
           end
         end
@@ -771,7 +782,7 @@ describe IO do
           io.gets_to_end.should eq("\r\nFoo\nBar")
         end
 
-        pending_win32 "gets ascii from socket (#9056)" do
+        it "gets ascii from socket (#9056)" do
           server = TCPServer.new "localhost", 0
           sock = TCPSocket.new "localhost", server.local_address.port
           begin
@@ -914,13 +925,13 @@ describe IO do
     end
   {% end %}
 
-  pending_win32 describe: "#close" do
-    it "aborts 'read' in a different thread" do
-      ch = Channel(Symbol).new(1)
+  describe "#close" do
+    it "aborts 'read' in a different fiber" do
+      ch = Channel(SpecChannelStatus).new(1)
 
       IO.pipe do |read, write|
         f = spawn do
-          ch.send :start
+          ch.send :begin
           read.gets
         rescue
           ch.send :end
@@ -928,20 +939,20 @@ describe IO do
 
         schedule_timeout ch
 
-        ch.receive.should eq(:start)
+        ch.receive.begin?.should be_true
         wait_until_blocked f
 
         read.close
-        ch.receive.should eq(:end)
+        ch.receive.end?.should be_true
       end
     end
 
-    it "aborts 'write' in a different thread" do
-      ch = Channel(Symbol).new(1)
+    it "aborts 'write' in a different fiber" do
+      ch = Channel(SpecChannelStatus).new(1)
 
       IO.pipe do |read, write|
         f = spawn do
-          ch.send :start
+          ch.send :begin
           loop do
             write.puts "some line"
           end
@@ -951,17 +962,21 @@ describe IO do
 
         schedule_timeout ch
 
-        ch.receive.should eq(:start)
+        ch.receive.begin?.should be_true
         wait_until_blocked f
 
         write.close
-        ch.receive.should eq(:end)
+        ch.receive.end?.should be_true
       end
     end
   end
 
-  {% unless flag?(:win32) %}
-    typeof(STDIN.cooked { })
-    typeof(STDIN.cooked!)
-  {% end %}
+  typeof(STDIN.noecho { })
+  typeof(STDIN.noecho!)
+  typeof(STDIN.echo { })
+  typeof(STDIN.echo!)
+  typeof(STDIN.cooked { })
+  typeof(STDIN.cooked!)
+  typeof(STDIN.raw { })
+  typeof(STDIN.raw!)
 end

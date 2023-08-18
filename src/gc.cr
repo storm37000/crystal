@@ -66,7 +66,9 @@ module GC
     gc_no : UInt64,
     markers_m1 : UInt64,
     bytes_reclaimed_since_gc : UInt64,
-    reclaimed_bytes_before_gc : UInt64
+    reclaimed_bytes_before_gc : UInt64,
+    expl_freed_bytes_since_gc : UInt64,
+    obtained_from_os_bytes : UInt64
 
   # Allocates and clears *size* bytes of memory.
   #
@@ -93,8 +95,11 @@ module GC
   # If *pointer* was allocated with `malloc_atomic`, the same constraints apply.
   #
   # The return value is a pointer that may be identical to *pointer* or different.
-  def self.realloc(pointer : Void*, size : Int) : Void*
-    realloc(pointer, LibC::SizeT.new(size))
+  #
+  # WARNING: Memory allocated using `Pointer.malloc` must be reallocated using
+  # `Pointer#realloc` instead.
+  def self.realloc(pointer : T*, size : Int) : T* forall T
+    realloc(pointer.as(Void*), LibC::SizeT.new(size)).as(T*)
   end
 end
 

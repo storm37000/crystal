@@ -13,9 +13,6 @@ require "lib_c"
 require "macros"
 require "object"
 require "comparable"
-{% if flag?(:win32) %}
-  require "windows_stubs"
-{% end %}
 require "exception"
 require "iterable"
 require "iterator"
@@ -55,9 +52,7 @@ require "intrinsics"
 require "io"
 require "kernel"
 require "math/math"
-{% unless flag?(:win32) %}
-  require "mutex"
-{% end %}
+require "mutex"
 require "named_tuple"
 require "nil"
 require "humanize"
@@ -72,7 +67,7 @@ require "range"
 require "reference"
 require "regex"
 require "set"
-{% unless flag?(:win32) || flag?(:wasm32) %}
+{% unless flag?(:wasm32) %}
   require "signal"
 {% end %}
 require "slice"

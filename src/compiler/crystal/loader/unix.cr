@@ -35,21 +35,29 @@ class Crystal::Loader
     end
   end
 
-  SHARED_LIBRARY_EXTENSION = {% if flag?(:darwin) %}
-                               ".dylib"
-                             {% else %}
-                               ".so"
-                             {% end %}
-
   # Parses linker arguments in the style of `ld`.
   def self.parse(args : Array(String), *, search_paths : Array(String) = default_search_paths) : self
     libnames = [] of String
     file_paths = [] of String
 
+    # `man ld(1)` on Linux:
+    #
+    # > -L searchdir
+    # > ... The directories are searched in the order in which they are
+    # specified on the command line. Directories specified on the command line
+    # are searched before the default directories.
+    #
+    # `man ld(1)` on macOS:
+    #
+    # > -Ldir
+    # > ... Directories specified with -L are searched in the order they appear
+    # > on the command line and before the default search path...
+    extra_search_paths = [] of String
+
     # OptionParser removes items from the args array, so we dup it here in order to produce a meaningful error message.
     OptionParser.parse(args.dup) do |parser|
       parser.on("-L DIRECTORY", "--library-path DIRECTORY", "Add DIRECTORY to library search path") do |directory|
-        search_paths << directory
+        extra_search_paths << directory
       end
       parser.on("-l LIBNAME", "--library LIBNAME", "Search for library LIBNAME") do |libname|
         libnames << libname
@@ -62,6 +70,8 @@ class Crystal::Loader
       end
     end
 
+    search_paths = extra_search_paths + search_paths
+
     begin
       self.new(search_paths, libnames, file_paths)
     rescue exc : LoadError
@@ -71,6 +81,14 @@ class Crystal::Loader
     end
   end
 
+  def self.library_filename(libname : String) : String
+    {% if flag?(:darwin) %}
+      "lib#{libname}.dylib"
+    {% else %}
+      "lib#{libname}.so"
+    {% end %}
+  end
+
   def find_symbol?(name : String) : Handle?
     @handles.each do |handle|
       address = LibC.dlsym(handle, name)
@@ -78,11 +96,20 @@ class Crystal::Loader
     end
   end
 
-  def load_file(path : String | ::Path) : Handle
+  def load_file(path : String | ::Path) : Nil
     load_file?(path) || raise LoadError.new_dl_error "cannot load #{path}"
   end
 
-  def load_library(libname : String) : Handle
+  def load_file?(path : String | ::Path) : Bool
+    handle = open_library(path.to_s)
+    return false unless handle
+
+    @handles << handle
+    @loaded_libraries << path.to_s
+    true
+  end
+
+  def load_library(libname : String) : Nil
     load_library?(libname) || raise LoadError.new_dl_error "cannot find -l#{libname}"
   end
 
@@ -110,18 +137,28 @@ class Crystal::Loader
   def self.default_search_paths : Array(String)
     default_search_paths = [] of String
 
+    # TODO: respect the compiler's DT_RPATH (#13490)
+
     if env_library_path = ENV[{{ flag?(:darwin) ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH" }}]?
       # TODO: Expand tokens $ORIGIN, $LIB, $PLATFORM
       default_search_paths.concat env_library_path.split(Process::PATH_DELIMITER, remove_empty: true)
     end
 
-    {% if flag?(:linux) || flag?(:bsd) %}
+    # TODO: respect the compiler's DT_RUNPATH
+    # TODO: respect $DYLD_FALLBACK_LIBRARY_PATH and the compiler's LC_RPATH on darwin
+
+    {% if (flag?(:linux) && !flag?(:android)) || flag?(:bsd) %}
       read_ld_conf(default_search_paths)
     {% end %}
 
     {% if flag?(:darwin) %}
       default_search_paths << "/usr/lib"
       default_search_paths << "/usr/local/lib"
+    {% elsif flag?(:android) %}
+      default_search_paths << "/vendor/lib64" if File.directory?("/vendor/lib64")
+      default_search_paths << "/system/lib64" if File.directory?("/system/lib64")
+      default_search_paths << "/vendor/lib"
+      default_search_paths << "/system/lib"
     {% else %}
       {% if flag?(:linux) %}
         default_search_paths << "/lib64" if File.directory?("/lib64")

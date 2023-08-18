@@ -11,7 +11,24 @@ module Crystal::System::FileDescriptor
     raise NotImplementedError.new "Crystal::System::FileDescriptor.pipe"
   end
 
+  def self.fcntl(fd, cmd, arg = 0)
+    r = LibC.fcntl(fd, cmd, arg)
+    raise IO::Error.from_errno("fcntl() failed") if r == -1
+    r
+  end
+
+  private def system_blocking_init(value)
+  end
+
   private def system_reopen(other : IO::FileDescriptor)
-    raise NotImplementedError.new "Crystal::System::FileDescriptor.system_reopen"
+    raise NotImplementedError.new "Crystal::System::FileDescriptor#system_reopen"
+  end
+
+  private def system_echo(enable : Bool, & : ->)
+    raise NotImplementedError.new "Crystal::System::FileDescriptor#system_echo"
+  end
+
+  private def system_raw(enable : Bool, & : ->)
+    raise NotImplementedError.new "Crystal::System::FileDescriptor#system_raw"
   end
 end

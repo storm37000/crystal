@@ -176,9 +176,14 @@ class Crystal::Doc::Type
             defs << method(def_with_metadata.def, false)
           end
         end
-        defs.sort_by!(&.name.downcase)
+        defs.sort_by! { |x| sort_order(x) }
       end
     end
+  end
+
+  private def sort_order(item)
+    # Sort operators first, then alphanumeric (case-insensitive).
+    {item.name[0].alphanumeric? ? 1 : 0, item.name.downcase}
   end
 
   @class_methods : Array(Method)?
@@ -201,7 +206,7 @@ class Crystal::Doc::Type
           end
         end
       end
-      class_methods.sort_by!(&.name.downcase)
+      class_methods.sort_by! { |x| sort_order(x) }
     end
   end
 
@@ -225,7 +230,7 @@ class Crystal::Doc::Type
           end
         end
       end
-      macros.sort_by!(&.name.downcase)
+      macros.sort_by! { |x| sort_order(x) }
     end
   end
 
@@ -512,11 +517,7 @@ class Crystal::Doc::Type
     if (named_args = node.named_args) && !named_args.empty?
       io << ", " unless node.type_vars.empty?
       named_args.join(io, ", ") do |entry|
-        if Symbol.needs_quotes_for_named_argument?(entry.name)
-          entry.name.inspect(io)
-        else
-          io << entry.name
-        end
+        Symbol.quote_for_named_argument(io, entry.name)
         io << ": "
         node_to_html entry.value, io, html: html
       end
@@ -566,7 +567,7 @@ class Crystal::Doc::Type
     return false unless node.is_a?(Path)
 
     match = lookup_path(node)
-    match && match.type == @generator.program.nil_type
+    !!match.try &.type == @generator.program.nil_type
   end
 
   def node_to_html(node, io, html : HTMLOption = :all)
@@ -631,11 +632,7 @@ class Crystal::Doc::Type
   def type_to_html(type : Crystal::NamedTupleInstanceType, io, text = nil, html : HTMLOption = :all)
     io << '{'
     type.entries.join(io, ", ") do |entry|
-      if Symbol.needs_quotes_for_named_argument?(entry.name)
-        entry.name.inspect(io)
-      else
-        io << entry.name
-      end
+      Symbol.quote_for_named_argument(io, entry.name)
       io << ": "
       type_to_html entry.type, io, html: html
     end
